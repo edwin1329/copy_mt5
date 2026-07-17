@@ -1,0 +1,71 @@
+{
+  "master": {
+    "login": 12345678,
+    "password": "tu_password",
+    "server": "NombreBroker-Real",
+    "path": "C:\\MT5\\Master\\terminal64.exe",
+    "label": "Master"
+  },
+  "followers": [
+    {
+      "login": 87654321,
+      "password": "password_follower1",
+      "server": "NombreBroker-Real",
+      "path": "C:\\MT5\\Follower1\\terminal64.exe",
+      "label": "Follower 1"
+    },
+    {
+      "login": 11223344,
+      "password": "password_follower2",
+      "server": "NombreBroker-Real",
+      "path": "C:\\MT5\\Follower2\\terminal64.exe",
+      "label": "Follower 2",
+      "copy_settings": {
+        "recalculate_lot": true,
+        "lot_mode": "range",
+        "lot_ranges": [
+          { "from": 0.01, "to": 0.05, "lot": 0.01 },
+          { "from": 0.06, "to": 0.99, "lot": 0.02 }
+        ]
+      }
+    }
+  ],
+  "copy_settings": {
+    "recalculate_lot": false,
+    "lot_mode": "range",
+    "lot_value": 0.01,
+    "lot_ranges": [
+      { "from": 0.01, "to": 0.05, "lot": 0.01 },
+      { "from": 0.06, "to": 0.10, "lot": 0.02 },
+      { "from": 0.11, "to": 0.50, "lot": 0.05 },
+      { "from": 0.51, "to": 99.0, "lot": 0.10 }
+    ],
+    "poll_interval": 0.5,
+    "fallback_interval": 30.0,
+    "max_slippage": 10,
+    "symbols": {
+      "B 1000 Idx.": {
+        "default_multiplier": 2.5,
+        "max_lot": 0.50
+      },
+      "C 1000 Idx.": {
+        "default_multiplier": 2.5,
+        "max_lot": 0.50
+      },
+      "B 500 Idx.": {
+        "default_multiplier": 1.8,
+        "max_lot": 0.50
+      },
+      "C 500 Idx.": {
+        "default_multiplier": 1.8,
+        "max_lot": 0.50
+      }
+    },
+    "volatility_lot_boost": {
+      "enabled": false,
+      "trigger_lot": 0.2,
+      "extra_lot": 0.3,
+      "symbols": ["B 1000 Idx.", "B 500 Idx.", "C 500 Idx.", "C 1000 Idx."]
+    }
+  }
+}
