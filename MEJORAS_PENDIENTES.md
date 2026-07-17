@@ -19,7 +19,66 @@ Actualizar este archivo al completar cada ítem.
 
 #### 1. ~~Sync con ACK + retry~~ ✅ hecho
 
-Opcional futuro: reconciliación periódica vs deals del master (catch-up histórico).
+---
+
+#### 1b. Catch-up / reconciliación de posiciones abiertas
+
+**Problema:** al arrancar, `initialize_snapshot()` absorbe las posiciones ya abiertas del master **sin copiarlas**. Si el copier estuvo caído (UTM bloqueado, crash, reinicio) mientras el master abría, esas posiciones quedan huérfanas: el master las tiene, los followers no, y el loop normal nunca las ve como “nuevas”.
+
+**Diferencia con lo ya implementado:**
+
+| Mecanismo | Cuándo | Qué cubre |
+|---|---|---|
+| `load_and_resume()` ✅ | Al arrancar | Eventos ya detectados que quedaron pendientes de ACK en `state/pending_events.json` |
+| **Catch-up** (nuevo) | Al arrancar / periódico | Posiciones que el copier **nunca llegó a ver** porque estaba caído |
+
+**Propuesta:** comparar master vs cada follower usando el tag `copy#{master_ticket}`:
+
+```
+faltantes  = master abierto sin copy#ticket en follower  → ABRIR (o reportar)
+sobrantes  = copy#ticket en follower cuyo master ya no existe → CERRAR (solo en modo full)
+desajustadas = SL/TP distintos (opcional) → MODIFICAR
+```
+
+Encaje en `main.py` (después de snapshot, antes del loop):
+
+```
+coordinator.load_and_resume()
+monitor.initialize_snapshot()
+coordinator.catch_up(master_positions)   # ← nuevo
+monitor.start()
+```
+
+**Modos** (de menos a más agresivo):
+
+| Modo | Comportamiento | Riesgo |
+|---|---|---|
+| `off` (actual) | Ignora abiertas al arrancar | Followers desincronizados tras caída |
+| `report` | Solo loguea diferencias, no opera | Cero; decisión manual |
+| `open_missing` | Abre en followers lo que falta del master | Medio: precio de entrada distinto al original |
+| `full` | Abre faltantes y cierra sobrantes | Alto si el mapeo por comment falla |
+
+**Punto delicado — precio de entrada:** el catch-up copia la *posición*, no el precio histórico. Si el master abrió hace horas y el mercado se movió, el follower entra al precio actual. Por eso hace falta una ventana de tolerancia:
+
+```json
+"catch_up": {
+  "mode": "report",
+  "max_age_minutes": 10,
+  "max_price_drift_pct": 0.3,
+  "interval_minutes": 0
+}
+```
+
+- Si la posición es más vieja que `max_age_minutes` o el drift de precio supera el umbral → solo reportar.
+- `interval_minutes > 0` → también correr catch-up periódico como auto-heal (además del arranque).
+
+**Fases sugeridas:**
+
+1. Modo `report` (log + conteo de faltantes/sobrantes)
+2. Modo `open_missing` con ventana de edad/drift + open idempotente (ya existe)
+3. Opcional: periódico + modo `full`
+
+**Contexto:** incidente 2026-07-16 — UTM bloqueó la VM; al reiniciar el copy volvió a funcionar pero las órdenes ya abiertas del master no se copiaron (comportamiento esperado del snapshot). El catch-up cubre exactamente ese hueco.
 
 ---
 
@@ -149,7 +208,8 @@ Sin métricas se optimiza a ciegas. Añadir (log estructurado o archivo):
 
 1. ~~Sync ACK + retry + open idempotente~~ ✅
 2. **Tope de lote por balance (`capital_lot`)** — tramos 200→0.2 / 300→0.5
-3. Política de lotes fina (`copy_lots` / overrides + símbolos huérfanos) si aún hace falta
-4. Ticket map + partial close
-5. Métricas de latencia / éxito
+3. **Catch-up** — empezar en modo `report`, luego `open_missing` con ventana de edad/drift
+4. Política de lotes fina (`copy_lots` / overrides + símbolos huérfanos) si aún hace falta
+5. Ticket map + partial close
+6. Métricas de latencia / éxito
 
